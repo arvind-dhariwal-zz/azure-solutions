@@ -1,0 +1,104 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "actions": {
+      "Get_blob_content": {
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azureblob']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent(triggerBody()?['Path']))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        },
+        "metadata": {
+          "JTJmY29udGFpbmVyLTElMmZGdXNpb24uanBn": "@{triggerBody()?['Path']}"
+        },
+        "runAfter": {},
+        "type": "ApiConnection"
+      },
+      "Send_an_email_(V2)": {
+        "inputs": {
+          "body": {
+            "Attachments": [
+              {
+                "ContentBytes": "@{base64(body('Get_blob_content'))}",
+                "Name": "@triggerBody()?['DisplayName']"
+              }
+            ],
+            "Body": "<p>This is test email to embed image as well as attached image for simedarby<br>\n<img src=\"data:@{triggerBody()?['MediaType']};base64,@{base64(body('Get_blob_content'))}\"></p>",
+            "Subject": "Test-SimeDarbyIssue-LogicApp-@{triggerBody()?['MediaType']}",
+            "To": "Kumar.arvind@microsoft.com"
+          },
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['office365']['connectionId']"
+            }
+          },
+          "method": "post",
+          "path": "/v2/Mail"
+        },
+        "runAfter": {
+          "Get_blob_content": [
+            "Succeeded"
+          ]
+        },
+        "type": "ApiConnection"
+      }
+    },
+    "contentVersion": "1.0.0.0",
+    "outputs": {},
+    "parameters": {
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "When_a_blob_is_added_or_modified_(properties_only)": {
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azureblob']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/default/triggers/batch/onupdatedfile",
+          "queries": {
+            "folderId": "JTJmY29udGFpbmVyLTE=",
+            "maxFileCount": 10
+          }
+        },
+        "metadata": {
+          "JTJmY29udGFpbmVyLTE=": "/container-1"
+        },
+        "recurrence": {
+          "frequency": "Second",
+          "interval": 5
+        },
+        "splitOn": "@triggerBody()",
+        "type": "ApiConnection"
+      }
+    }
+  },
+  "parameters": {
+    "$connections": {
+      "value": {
+        "azureblob": {
+          "connectionId": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/resourceGroups/rg-simedarby/providers/Microsoft.Web/connections/azureblob",
+          "connectionName": "azureblob",
+          "id": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/providers/Microsoft.Web/locations/southeastasia/managedApis/azureblob"
+        },
+        "office365": {
+          "connectionId": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/resourceGroups/rg-simedarby/providers/Microsoft.Web/connections/office365",
+          "connectionName": "office365",
+          "id": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/providers/Microsoft.Web/locations/southeastasia/managedApis/office365"
+        }
+      }
+    }
+  }
+}
