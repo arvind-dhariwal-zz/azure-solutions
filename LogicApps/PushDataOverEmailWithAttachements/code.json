@@ -30,8 +30,8 @@
                 "Name": "@triggerBody()?['DisplayName']"
               }
             ],
-            "Body": "<p>This is test email to embed image as well as attached image for simedarby<br>\n<img src=\"data:@{triggerBody()?['MediaType']};base64,@{base64(body('Get_blob_content'))}\"></p>",
-            "Subject": "Test-SimeDarbyIssue-LogicApp-@{triggerBody()?['MediaType']}",
+            "Body": "<p>This is test email to embed image as well as attached image for sd<br>\n<img src=\"data:@{triggerBody()?['MediaType']};base64,@{base64(body('Get_blob_content'))}\"></p>",
+            "Subject": "Test-sdIssue-LogicApp-@{triggerBody()?['MediaType']}",
             "To": "Kumar.arvind@microsoft.com"
           },
           "host": {
@@ -89,12 +89,12 @@
     "$connections": {
       "value": {
         "azureblob": {
-          "connectionId": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/resourceGroups/rg-simedarby/providers/Microsoft.Web/connections/azureblob",
+          "connectionId": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/resourceGroups/rg-sd/providers/Microsoft.Web/connections/azureblob",
           "connectionName": "azureblob",
           "id": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/providers/Microsoft.Web/locations/southeastasia/managedApis/azureblob"
         },
         "office365": {
-          "connectionId": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/resourceGroups/rg-simedarby/providers/Microsoft.Web/connections/office365",
+          "connectionId": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/resourceGroups/rg-sd/providers/Microsoft.Web/connections/office365",
           "connectionName": "office365",
           "id": "/subscriptions/6cca3516-d02e-494a-a828-cc05b0811f29/providers/Microsoft.Web/locations/southeastasia/managedApis/office365"
         }
