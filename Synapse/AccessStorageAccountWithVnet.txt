@@ -1,24 +1,24 @@
 # --------------- Step 1 : login Azure  ---------------------------------- 
 
-$subscriptionId = '6cca3516-d02e-494a-a828-cc05b0811f29'
-$resourceGroupName = 'rg-celcom'
-$dataLakeAccountName = 'teststorageaccount231'
+$subscriptionId = '<>'
+$resourceGroupName = '<>'
+$dataLakeAccountName = '<>'
 
 
 Connect-AzAccount -Subscription $subscriptionId 
 
 # ---------------Step 2 : Setup module variables ---------------------------------- 
-$serverName = 'testdataload' 
+$serverName = '<>' 
 $fullyQualifiedServerName = $serverName + '.database.windows.net'
-$dataWarehouseName = 'usgsdataset'
+$dataWarehouseName = '<>'
 
-$dataLakeAccountName = 'teststorageaccount231'
+$dataLakeAccountName = '<>'
 
-$virtualNetworkName = 'usgsvirtualnetwork' 
-$subNetName = 'usgsSubnet' 
+$virtualNetworkName = '<>' 
+$subNetName = '<>' 
 
-$dbUserName = 'usgsadmin'
-$dbPassword = 'P@ssword'
+$dbUserName = '<>'
+$dbPassword = '<>'
 $securePasswordString = ConvertTo-SecureString $dbPassword -AsPlainText -Force
 $dbCredentials = New-Object System.Management.Automation.PSCredential($dbUserName, $securePasswordString)
 
