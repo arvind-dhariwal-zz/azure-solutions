@@ -1,0 +1,107 @@
+# --------------- Step 1 : login Azure  ---------------------------------- 
+
+$subscriptionId = '6cca3516-d02e-494a-a828-cc05b0811f29'
+$resourceGroupName = 'rg-celcom'
+$dataLakeAccountName = 'teststorageaccount231'
+
+
+Connect-AzAccount -Subscription $subscriptionId 
+
+# ---------------Step 2 : Setup module variables ---------------------------------- 
+$serverName = 'testdataload' 
+$fullyQualifiedServerName = $serverName + '.database.windows.net'
+$dataWarehouseName = 'usgsdataset'
+
+$dataLakeAccountName = 'teststorageaccount231'
+
+$virtualNetworkName = 'usgsvirtualnetwork' 
+$subNetName = 'usgsSubnet' 
+
+$dbUserName = 'usgsadmin'
+$dbPassword = 'P@ssword'
+$securePasswordString = ConvertTo-SecureString $dbPassword -AsPlainText -Force
+$dbCredentials = New-Object System.Management.Automation.PSCredential($dbUserName, $securePasswordString)
+
+
+
+#----------------Step 3 : Restrict global access to Azure Data Lake Storage instance
+# Display the default rule for the data lake
+(Get-AzStorageAccountNetworkRuleSet -ResourceGroupName $resourceGroupName -AccountName $dataLakeAccountName).DefaultAction
+
+# Configure network rules to deny access by default
+Update-AzStorageAccountNetworkRuleSet -ResourceGroupName $resourceGroupName -Name $dataLakeAccountName -DefaultAction Deny 
+
+
+# Configure network rules to allow access from trusted Microsoft services and logging pipelines
+Update-AzStorageAccountNetworkRuleSet -ResourceGroupName $ResourceGroupName -Name $DataLakeAccountName -Bypass AzureServices,Metrics,Logging 
+
+#----------------Step 4 : Create managed-service identity for your Azure SQL Data Warehouse
+# Generate and assign an Azure AD Identity for this server
+Set-AzSqlServer -ResourceGroupName $resourceGroupName -ServerName $serverName -AssignIdentity 
+
+
+# List details of the Storage Blob Data Contributor Role
+$StorageContributorRole = "Storage Blob Data Contributor"
+Get-AzRoleDefinition -Name $StorageContributorRole
+
+# Get ServicePrincipalId assigned to SQL Server
+$serverAzureAdIdentity = (Get-AzADServicePrincipal -SearchString $ServerName).Id
+
+# Grant server access to data lake (requires Owner permissions)
+# $subscriptionId = (Get-AzSubscription -SubscriptionName $subscriptionName).SubscriptionId
+$permissionScope = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.Storage/storageAccounts/$dataLakeAccountName"
+New-AzRoleAssignment -ObjectId $serverAzureAdIdentity -RoleDefinitionName $StorageContributorRole -Scope $permissionScope
+
+
+#----------------Step 5 : Create external table to read test message in data lake
+$databaseCredentialQuery = "CREATE MASTER KEY; CREATE DATABASE SCOPED CREDENTIAL readme_cred WITH IDENTITY = 'Managed Service Identity';"
+$externalDataSourceQuery = "CREATE EXTERNAL DATA SOURCE [usgsdatalakereadme] WITH (TYPE=HADOOP, LOCATION=N'abfss://readme@$dataLakeAccountName.dfs.core.windows.net', CREDENTIAL = readme_cred)"
+$externalFileFormatQuery = "CREATE EXTERNAL FILE FORMAT [usgsdatalakereadmeformat] WITH (FORMAT_TYPE = DELIMITEDTEXT, FORMAT_OPTIONS (FIELD_TERMINATOR = N'|', USE_TYPE_DEFAULT = False))"
+$externalTableQuery = "CREATE EXTERNAL TABLE [staging].[dataLakeAccessTest]([header] [nvarchar](40) NOT NULL,[notice] [nvarchar](150) NOT NULL)
+WITH (DATA_SOURCE = [usgsdatalakereadme],LOCATION = N'/readme.txt',FILE_FORMAT = [usgsdatalakereadmeformat],REJECT_TYPE = VALUE,REJECT_VALUE = 0)"
+Invoke-Sqlcmd -Query "CREATE schema staging" -ServerInstance $fullyQualifiedServerName -Database $dataWarehouseName -Username $dbCredentials.UserName -Password $dbCredentials.GetNetworkCredential().Password
+Invoke-Sqlcmd -Query $databaseCredentialQuery -ServerInstance $fullyQualifiedServerName -Database $dataWarehouseName -Username $dbCredentials.UserName -Password $dbCredentials.GetNetworkCredential().Password
+Invoke-Sqlcmd -Query $externalDataSourceQuery -ServerInstance $fullyQualifiedServerName -Database $dataWarehouseName -Username $dbCredentials.UserName -Password $dbCredentials.GetNetworkCredential().Password
+Invoke-Sqlcmd -Query $externalFileFormatQuery -ServerInstance $fullyQualifiedServerName -Database $dataWarehouseName -Username $dbCredentials.UserName -Password $dbCredentials.GetNetworkCredential().Password
+Invoke-Sqlcmd -Query $externalTableQuery -ServerInstance $fullyQualifiedServerName -Database $dataWarehouseName -Username $dbCredentials.UserName -Password $dbCredentials.GetNetworkCredential().Password
+
+#----------------Step 6 : Issue data warehouse query to test access to data lake storage instance.
+Invoke-Sqlcmd -Query "SELECT * FROM staging.dataLakeAccessTest" -ServerInstance $fullyQualifiedServerName -Database $dataWarehouseName -Username $dbCredentials.UserName -Password $dbCredentials.GetNetworkCredential().Password 
+
+
+
+
+#--------------Step 7 : Add Azure Data Lake Storage to Virtual Network
+# Get existing virtual network
+$vnetInstance = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $virtualNetworkName
+
+# Configure virtual network goal state
+$subnetConfig = Set-AzVirtualNetworkSubnetConfig -Name $subNetName -VirtualNetwork $vnetInstance -AddressPrefix "10.0.0.0/24" -ServiceEndpoint "Microsoft.Storage"
+
+# Enable service endpoint for Azure storage service on virtual network subnet
+Set-AzVirtualNetwork -VirtualNetwork $subnetConfig 
+
+
+# Add virtual network rule to data lake instance
+$subnetInstance = Get-AzVirtualNetworkSubnetConfig -Name $subNetName -VirtualNetwork $vnetInstance
+Add-AzStorageAccountNetworkRule -ResourceGroupName $resourceGroupName -Name $dataLakeAccountName -VirtualNetworkResourceId $subnetInstance.Id 
+
+#--------------Step 8 Issue data warehouse query to test access to data lake storage instance. This query succeeds because the data warehouse uses managed service identity authentication
+Invoke-Sqlcmd -Query "SELECT * FROM staging.dataLakeAccessTest" -ServerInstance $fullyQualifiedServerName -Database $dataWarehouseName -Username $dbCredentials.UserName -Password $dbCredentials.GetNetworkCredential().Password 
+
+
+#-------------------Step 10 :Add SQL Data Warehouse instance to virtual network
+# Configure virtual network goal state
+$subnetConfig = Set-AzVirtualNetworkSubnetConfig -Name $subNetName -VirtualNetwork $vnetInstance -AddressPrefix "10.0.0.0/24" -ServiceEndpoint "Microsoft.Sql"
+
+# Enable service endpoint for Azure SQL Server on existing virtual network subnet
+Set-AzVirtualNetwork -VirtualNetwork $subnetConfig 
+ 
+# Add virtual network rule to SQL Server instance
+$subnetInstance = Get-AzVirtualNetworkSubnetConfig -Name $subNetName -VirtualNetwork $vnetInstance
+New-AzSqlServerVirtualNetworkRule -ResourceGroupName $resourceGroupName -ServerName $serverName -VirtualNetworkRuleName $subNetName -VirtualNetworkSubnetId $subnetInstance.Id  
+
+#--------------Step 11 Issue data warehouse query to test access to data lake storage instance. This query succeeds because the data warehouse uses managed service identity authentication
+Invoke-Sqlcmd -Query "SELECT * FROM staging.dataLakeAccessTest" -ServerInstance $fullyQualifiedServerName -Database $dataWarehouseName -Username $dbCredentials.UserName -Password $dbCredentials.GetNetworkCredential().Password 
+
+
